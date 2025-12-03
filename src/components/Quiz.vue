@@ -135,6 +135,7 @@ watch(currentPage, (newVal) => {
           <el-radio :value="'B'" size="large" class="option-item">B. {{ q.options.B }}</el-radio>
           <el-radio :value="'C'" size="large" class="option-item">C. {{ q.options.C }}</el-radio>
           <el-radio :value="'D'" size="large" class="option-item">D. {{ q.options.D }}</el-radio>
+          <el-radio v-if="q.options.E" :value="'E'" size="large" class="option-item">E. {{ q.options.E }}</el-radio>
         </el-radio-group>
 
         <el-checkbox-group v-else v-model="userAnswers[q.id]" class="checkbox-group">
@@ -142,6 +143,7 @@ watch(currentPage, (newVal) => {
           <el-checkbox value="B" size="large" class="option-item">B. {{ q.options.B }}</el-checkbox>
           <el-checkbox value="C" size="large" class="option-item">C. {{ q.options.C }}</el-checkbox>
           <el-checkbox value="D" size="large" class="option-item">D. {{ q.options.D }}</el-checkbox>
+          <el-checkbox v-if="q.options.E" value="E" size="large" class="option-item">E. {{ q.options.E }}</el-checkbox>
         </el-checkbox-group>
       </div>
 

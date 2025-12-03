@@ -699,15 +699,14 @@ function processFormat5(filePath, category) {
                 }
             }
 
-            if (/^\d+[\.．]/.test(line)) {
+            if (/^\d+[\.．、]/.test(line)) {
                 if (currentQ) {
                     extracted.push(currentQ);
                 }
 
-                const dotMatch = line.match(/^(\d+)[\.．]/);
-                const dotIndex = dotMatch ? dotMatch[0].length - 1 : line.indexOf('.');
-                const currentNum = parseInt(line.substring(0, dotIndex));
-                let text = line.substring(dotIndex + 1).trim();
+                const numMatch = line.match(/^(\d+)[\.．、]/);
+                const currentNum = numMatch ? parseInt(numMatch[1]) : NaN;
+                let text = numMatch ? line.substring(numMatch[0].length).trim() : line.trim();
 
                 // Extract answer letters from question text parens
                 const answers = [];
@@ -734,7 +733,7 @@ function processFormat5(filePath, category) {
 
             if (currentQ) {
                 // Accumulate option lines
-                if (/^(A|B|C|D|E)[．\.]?\s/.test(line) || /\bA[．\.]?\s/.test(line)) {
+                if (/^(A|B|C|D|E)[．\.、]?\s*/.test(line) || /\bA[．\.、]?\s*/.test(line)) {
                     if (!currentQ.rawOptions) currentQ.rawOptions = '';
                     currentQ.rawOptions += line + ' ';
                 } else if (currentQ.rawOptions) {
@@ -752,7 +751,8 @@ function processFormat5(filePath, category) {
             if (q.rawOptions) {
                 const text = q.rawOptions.replace(/\s+/g, ' ').trim();
                 const matches = [];
-                const regexMarker = /(A|B|C|D|E)[．\.]?\s/g;
+                // Match A-E at start of word, followed by punctuation (dot/comma) OR whitespace
+                const regexMarker = /(?<!\S)(A|B|C|D|E)([．\.、]\s*|\s+)/g;
                 let mm;
                 while ((mm = regexMarker.exec(text)) !== null) {
                     matches.push({ key: mm[1], index: mm.index, len: mm[0].length });
@@ -774,6 +774,125 @@ function processFormat5(filePath, category) {
 
         console.log(`Parsed ${finalExtracted.length} questions from ${path.basename(filePath)} as category '${category}'`);
         addQuestions(finalExtracted, category);
+    } catch (err) {
+        console.error(`Error processing ${filePath}:`, err);
+    }
+}
+
+// --- Processor for Format 6: 学术论文.txt ---
+function processFormat6(filePath, category) {
+    try {
+        const data = fs.readFileSync(filePath, 'utf8');
+        const content = data.replace(/\r\n/g, '\n');
+        const lines = content.split('\n').map(l => l.trim());
+
+        const extracted = [];
+        let currentQ = null;
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            if (!line) continue;
+
+            // Start of a new question: "1、"
+            if (/^\d+、/.test(line)) {
+                if (currentQ) extracted.push(currentQ);
+
+                const currentNum = parseInt(line.match(/^(\d+)、/)[1]);
+                let text = line.replace(/^\d+、/, '').trim();
+
+                let type = 'single';
+                if (/[（\(]\s*填空题\s*[）\)]/.test(text)) {
+                    type = 'fill';
+                } else if (/[（\(]\s*多选题\s*[）\)]/.test(text)) {
+                    type = 'multiple';
+                } else if (/[（\(]\s*单选题\s*[）\)]/.test(text)) {
+                    type = 'single';
+                }
+
+                // Remove type label from text if present
+                text = text.replace(/^[（\(]\s*(单|多|判断|填空)(选题|题)?\s*[）\)]/, '').trim();
+
+                currentQ = {
+                    question: text,
+                    originalNum: currentNum,
+                    options: {},
+                    answer: '',
+                    type: type,
+                    rawOptions: ''
+                };
+                continue;
+            }
+
+            // Answer line: 支持“答案：”或“答案:”
+            if (/^答案[:：]/.test(line)) {
+                const contentAns = line.replace(/^答案[:：]/, '').trim();
+                if (currentQ) {
+                    const match = contentAns.match(/^([A-Z]+)/);
+                    if (match) {
+                        currentQ.answer = match[1];
+                        if (currentQ.type !== 'fill') {
+                            currentQ.type = currentQ.answer.length > 1 ? 'multiple' : 'single';
+                        }
+                    } else {
+                        currentQ.answer = contentAns;
+                        if (currentQ.type !== 'single') currentQ.type = 'fill';
+                    }
+                    extracted.push(currentQ);
+                    currentQ = null;
+                }
+                continue;
+            }
+
+            // Collect options (A. / B. / ...), allow continuous lines
+            if (currentQ) {
+                if (/^[A-E][\.．]/.test(line) || line.includes('A.') || line.includes('A、') || (currentQ.rawOptions && currentQ.rawOptions.length > 0)) {
+                    if (!currentQ.rawOptions) currentQ.rawOptions = '';
+                    currentQ.rawOptions += line + ' ';
+                } else {
+                    currentQ.question += ' ' + line;
+                }
+            }
+        }
+
+        // Push last question if still open
+        if (currentQ) extracted.push(currentQ);
+
+        // Parse options from rawOptions
+        const finalExtracted = [];
+        extracted.forEach(q => {
+            if (q.rawOptions) {
+                const text = q.rawOptions.replace(/\s+/g, ' ').trim();
+                const markers = ['A.', 'B.', 'C.', 'D.', 'E.', 'A、', 'B、', 'C、', 'D、', 'E、'];
+                const indices = [];
+
+                markers.forEach(m => {
+                    const idx = text.indexOf(m);
+                    if (idx !== -1) {
+                        indices.push({ marker: m, index: idx });
+                    }
+                });
+
+                indices.sort((a, b) => a.index - b.index);
+
+                if (indices.length > 0) {
+                    for (let i = 0; i < indices.length; i++) {
+                        const current = indices[i];
+                        const next = indices[i+1];
+                        const key = current.marker.replace(/[、.]/g, '');
+                        const start = current.index + current.marker.length;
+                        const end = next ? next.index : text.length;
+                        const value = text.substring(start, end).trim();
+                        q.options[key] = value;
+                    }
+                }
+                delete q.rawOptions;
+            }
+            finalExtracted.push(q);
+        });
+
+        console.log(`Parsed ${finalExtracted.length} questions from ${path.basename(filePath)} as category '${category}'`);
+        addQuestions(finalExtracted, category);
+
     } catch (err) {
         console.error(`Error processing ${filePath}:`, err);
     }
@@ -844,6 +963,14 @@ if (fs.existsSync(path8)) {
     processFormat5(path8, '云计算');
 } else {
     console.error(`File not found: ${path8}`);
+}
+
+// 9. Process Scholar paper file (Format 6)
+const path9 = path.resolve(__dirname, 'wenjian/学术论文.txt');
+if (fs.existsSync(path9)) {
+    processFormat6(path9, '学术论文');
+} else {
+    console.error(`File not found: ${path9}`);
 }
 
 // Write to JSON
