@@ -85,7 +85,7 @@ const getDisplayType = (q) => {
   if (q.type === 'judge') return 'judge';
   const ans = (q.answer || '').trim();
   const opts = q.options || {};
-  const isJudgeText = ans === '正确' || ans === '错误' || ans === '对' || ans === '错' || ans === 'A' || ans === 'B';
+  const isJudgeText = ans === '正确' || ans === '错误' || ans === '对' || ans === '错';
   const hasJudgeOptions = (
     (opts.A === '正确' && opts.B === '错误') || (opts.A === '错误' && opts.B === '正确') ||
     (opts.A === '对' && opts.B === '错') || (opts.A === '错' && opts.B === '对')
