@@ -1,0 +1,150 @@
+《微信小程序开发》期末练习
+一、单选题
+1.微信小程序是由（）提出的，并解决了APP使用的效率问题。
+A.张小龙B.尤雨溪C.马化腾D.李彦宏
+正确答案：A
+2.小程序目录结构中，（）文件是应用配置文件。
+A.app.js B.app.json C.project.config.js D.index.json
+正确答案：B
+3.在小程序的页面组件中，（）是定义进度条。
+A.<progress> B.<program> C.<slider> D.<swiper>
+正确答案：A
+4.在<radio>和<checkbox>标签中，（）表示该选项中对应的值。
+A.checked属性B.value属性C.name属性D.type属性
+正确答案：B
+5.微信小程序中的flex布局，通过（）属性控制排列方向。
+A.flex B.flex-direction C.align-item D.justify-content
+正确答案：B
+6.微信小程序组件view中，（）用于鼠标按下时显示的class样式。
+A.hover-id B.hover C.hover-class D.hover-view
+正确答案：C
+7.在<scroll-view>组件中，用（）属性设置横向滚动条的位置。
+A.scroll-x B.scroll-top C.scroll-left D.scroll-right
+正确答案：C
+8.在音乐小程序列表渲染中，通过（）指令可以循环数组的中的每一项。
+A.wx:else B.wx:for C.wx:if D.wx:key
+正确答案：B
+9.在音乐列表中，进行音乐基础数据的绑定语法是（）。
+A.{{}} B.{} C.[] D.[[]]
+正确答案：A
+10.下列关于video组件的属性描述错误的是（）。
+A.control默认显示播放控件
+B.danmu-list弹幕列表
+C.poster设置视频封面的网络资源地址
+D.controls为false，对poster没有影响
+正确答案：A
+11.小程序中，用于页面跳转并保留当前页面的API是（）
+A.wx.navigateTo B.wx.redirectTo C.wx.switchTab D.wx.reLaunch
+正确答案：A
+12. 小程序中，用于获取用户授权信息的API是（ ）
+A. wx.login
+B. wx.getUserInfo
+C. wx.authorize
+D. wx.getSetting
+正确答案：D
+13. 以下哪个文件用于配置小程序的全局样式？（ ）
+A. app.json
+B. app.wxss
+C. app.js
+D. project.config.json
+正确答案：B
+14. 小程序中，用于本地存储数据的API是（ ）
+A. wx.setStorage
+B. wx.saveFile
+C. wx.writeFile
+D. wx.storeData
+正确答案：A
+15. 小程序中，用于监听页面滚动事件的函数是（ ）
+A. OnPageScroll B. onScroll C. OnReachBottomD. onPullDownRefresh
+正确答案：A
+16. 小程序中，用于实现地图功能的组件是（ ）
+A. <location>
+B. <map>
+C. <gps>
+D. <coordinate>
+正确答案：B
+17. 小程序中，用于实现画布绘制的组件是（ ）
+A. <draw> 
+B. <canvas>
+C. <paint>
+D. <graphic>
+正确答案：B
+18. 小程序中，用于实现表单提交的组件是（ ）
+A. <form> B. <submit> C. <input-group> D. <data-form>
+正确答案：A
+19. 小程序中，用于实现页面间传递参数的方式是（ ）
+A. GlobalData
+B. url query
+C. localStorage
+D. app.config
+正确答案：B
+20. 小程序中，用于实现下拉刷新的函数是（ ）
+A. OnPullDownRefresh
+B. onRefresh
+C. onScrollRefresh
+D. onReload
+正确答案：A
+二、填空题
+1. 微信小程序通过（______）、搜索关键字、群分享、好友分享方式打开。
+正确答案：扫码
+2. input 标签的（______）属性表示输入的类型，如文本、数字、身份证等。
+正确答案：type
+3. 在微信小程序中，wx.request()接口配置对象中（______）表示服务器接口地址。
+正确答案：url
+4. 在微信小程序中index.json文件中，（______）字段用来配置导航栏标题的颜色。
+正确答案：navigationBarTextStyle
+5. 微信小程序页面结构中，（______）布局方式被称做是弹性盒布局。
+正确答案：flex
+6. 在滚动条滚动时，通过（______）事件实现滚动条滚动时触发事件。
+正确答案：onPageScroll
+7. 在InnerAudioContext 实例中，用（______）来设置开始播放的位置，默认值为0。
+正确答案：startTime
+8. 通过用（______）获取用户当前的位置。
+正确答案：wx.getLocation
+9. 播放背景音乐实例的API接口是（______）。
+正确答案：wx.getBackgroundAudioManager
+10. 在小程序接口中，拨打电话的API是（______）。
+正确答案：wx.makePhoneCall
+11. 小程序中，用于定义全局样式的文件是（______）。
+正确答案：app.wxss
+12. 在 <swiper> 组件中，通过（______）属性设置是否显示面板指示点。
+正确答案：indicator-dots
+13. 小程序中，实现数据双向绑定的语法是（______）。
+正确答案：{{}}
+14. 在事件处理函数中，通过事件对象的（______）属性可以获取当前组件的标识符。
+正确答案：currentTarget.id
+15. 小程序页面的生命周期函数中，（______）在页面初次加载时执行。
+正确答案：onLoad
+16. 小程序中，使用（______）API 可以实现本地数据的持久化同步存储。
+正确答案：wx.setStorageSync
+17. 在 app.json 中，（______）字段用于配置小程序窗口的背景色。
+正确答案：backgroundColor
+18. 小程序中，通过（______）组件可以实现页面内容的滚动区域。
+正确答案：scroll-view
+19. 在网络请求 wx.request 中，设置请求头信息需要在（______）参数中配置。
+正确答案：header
+20. 小程序中，使用 wx.navigateTo 跳转页面时，最多可以打开（______）层页面。
+正确答案：10
+三、判断题
+1. 小程序中，wx.navigateTo 可以跳转到任意页面。（______）
+正确答案：错误
+2. 小程序中，wx.getUserInfo 可以直接获取用户信息，无需授权。（______）
+正确答案：错误
+3. 小程序中，app.json 可以配置窗口背景色。（______）
+正确答案：正确
+4. 小程序中，wx.setStorage 是异步存储数据。（______）
+正确答案：正确
+5. 小程序中，canvas 组件默认宽度为100%。（______）
+正确答案：错误
+6. 小程序中，wx.request 的默认超时时间为10秒。（______）
+正确答案：错误
+7. 小程序中，tabBar 最少配置2个，最多5个。（______）
+正确答案：正确
+8. 小程序中，wx.showToast 可以显示加载提示。（______）
+正确答案：错误
+9. 小程序中，wx.chooseImage 可以选择多张图片。（______）
+正确答案：正确
+10. 小程序中，wx.getSystemInfo 可以获取设备品牌。（______）
+正确答案：正确
+
+

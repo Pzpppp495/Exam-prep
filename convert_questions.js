@@ -898,6 +898,145 @@ function processFormat6(filePath, category) {
     }
 }
 
+function processWeChatPipe(filePath, category) {
+    try {
+        const data = fs.readFileSync(filePath, 'utf8');
+        const content = data.replace(/\r\n/g, '\n');
+        const lines = content.split('\n').map(l => l.trim()).filter(l => l !== '');
+        const extracted = [];
+        lines.forEach((line) => {
+            if (!line.includes('|')) return;
+            const parts = line.split('|').map(p => p.trim());
+            if (parts.length === 6) {
+                const [qText, aOpt, bOpt, cOpt, dOpt, ansRaw] = parts;
+                const options = { A: aOpt, B: bOpt, C: cOpt, D: dOpt };
+                let answer = ansRaw.toUpperCase();
+                if (!/^[A-D]$/.test(answer)) {
+                    const found = Object.entries(options).find((kv) => kv[1] === ansRaw);
+                    if (found) answer = found[0];
+                }
+                const valid = Object.values(options).every(v => v && v.length > 0) && /^[A-D]$/.test(answer);
+                if (valid) {
+                    extracted.push({
+                        question: qText,
+                        options,
+                        answer,
+                        type: 'single'
+                    });
+                }
+            } else if (parts.length === 2) {
+                const [qText, ansRaw] = parts;
+                const ansNorm = ansRaw.replace(/[。]/g, '').trim();
+                if (ansNorm === '正确' || ansNorm === '错误') {
+                    extracted.push({
+                        question: qText,
+                        options: { A: '正确', B: '错误' },
+                        answer: ansNorm,
+                        type: 'judge'
+                    });
+                } else if (ansNorm.length > 0) {
+                    extracted.push({
+                        question: qText,
+                        options: {},
+                        answer: ansRaw,
+                        type: 'fill'
+                    });
+                }
+            }
+        });
+        console.log(`Parsed ${extracted.length} questions from ${path.basename(filePath)} as category '${category}'`);
+        addQuestions(extracted, category);
+    } catch (err) {
+        console.error(`Error processing ${filePath}:`, err);
+    }
+}
+
+function processWeChatEnumerated(filePath, category) {
+    try {
+        const data = fs.readFileSync(filePath, 'utf8');
+        const content = data.replace(/\r\n/g, '\n');
+        const lines = content.split('\n').map(l => l.trim()).filter(l => l !== '');
+        const extracted = [];
+        let mode = '';
+        let i = 0;
+        const singleAnswers = {1:'A',2:'B',3:'A',4:'B',5:'B',6:'C',7:'C',8:'B',9:'A',10:'A',11:'A',12:'D',13:'B',14:'A',15:'A',16:'B',17:'B',18:'A',19:'B',20:'A'};
+        const fillAnswers = {1:'扫码',2:'type',3:'url',4:'navigationBarTextStyle',5:'flex',6:'onPageScroll',7:'startTime',8:'wx.getLocation',9:'wx.getBackgroundAudioManager',10:'wx.makePhoneCall',11:'app.wxss',12:'indicator-dots',13:'{{}}',14:'currentTarget.id',15:'onLoad',16:'wx.setStorageSync',17:'backgroundColor',18:'scroll-view',19:'header',20:'10'};
+        const judgeAnswers = {1:'错误',2:'错误',3:'正确',4:'正确',5:'错误',6:'错误',7:'正确',8:'错误',9:'正确',10:'正确'};
+        function parseOptions(text) {
+            const markers = ['A.','B.','C.','D.','A、','B、','C、','D、'];
+            const idx = [];
+            for (const m of markers) {
+                const p = text.indexOf(m);
+                if (p !== -1) idx.push({ m, p });
+            }
+            idx.sort((a, b) => a.p - b.p);
+            const o = {};
+            for (let j = 0; j < idx.length; j++) {
+                const key = idx[j].m.replace(/[\.、]/g, '').charAt(0);
+                const start = idx[j].p + idx[j].m.length;
+                const end = j + 1 < idx.length ? idx[j + 1].p : text.length;
+                o[key] = text.substring(start, end).trim();
+            }
+            return o;
+        }
+        while (i < lines.length) {
+            const line = lines[i];
+            if (line.includes('一、单选')) { mode = 'single'; i++; continue; }
+            if (line.includes('二、填空')) { mode = 'fill'; i++; continue; }
+            if (line.includes('三、判断')) { mode = 'judge'; i++; continue; }
+            if (mode === 'single' && /^\d+[\.\u3002]/.test(line)) {
+                const num = parseInt(line.match(/^(\d+)/)[1]);
+                const qText = line.replace(/^\d+[\.\u3002]\s*/, '').trim();
+                let optLine = '';
+                let j = i + 1;
+                const segs = [];
+                while (j < lines.length) {
+                    const nl = lines[j];
+                    if (/^\d+[\.\u3002]/.test(nl) || nl.includes('二、填空') || nl.includes('三、判断')) break;
+                    if (nl.startsWith('A') || nl.startsWith('B') || nl.startsWith('C') || nl.startsWith('D') || nl.includes('A.') || nl.includes('A、') || nl.includes('B.') || nl.includes('C.') || nl.includes('D.')) {
+                        segs.push(nl);
+                    }
+                    j++;
+                }
+                optLine = segs.join(' ');
+                if (optLine || (line.includes('A.') || line.includes('A、'))) {
+                    const options = parseOptions(optLine || line);
+                    const ans = singleAnswers[num];
+                    if (ans && options.A && options.B && options.C && options.D) {
+                        extracted.push({ question: qText, options, answer: ans, type: 'single' });
+                    }
+                }
+                i = optLine ? j : (i + 1);
+                continue;
+            }
+            if (mode === 'fill' && /^\d+[\.\u3002]/.test(line)) {
+                const num = parseInt(line.match(/^(\d+)/)[1]);
+                const qText = line.replace(/^\d+[\.\u3002]\s*/, '').trim();
+                const ans = fillAnswers[num];
+                if (ans) {
+                    extracted.push({ question: qText, options: {}, answer: ans, type: 'fill' });
+                }
+                i++;
+                continue;
+            }
+            if (mode === 'judge' && /^\d+[\.\u3002]/.test(line)) {
+                const num = parseInt(line.match(/^(\d+)/)[1]);
+                const qText = line.replace(/^\d+[\.\u3002]\s*/, '').trim();
+                const ans = judgeAnswers[num];
+                if (ans) {
+                    extracted.push({ question: qText, options: {}, answer: ans, type: 'judge' });
+                }
+                i++;
+                continue;
+            }
+            i++;
+        }
+        console.log(`Parsed ${extracted.length} questions from ${path.basename(filePath)} as category '${category}'`);
+        addQuestions(extracted, category);
+    } catch (err) {
+        console.error(`Error processing ${filePath}:`, err);
+    }
+}
 // Main execution
 console.log('Starting conversion...');
 
@@ -973,7 +1112,35 @@ if (fs.existsSync(path9)) {
     console.error(`File not found: ${path9}`);
 }
 
+// 10. Process WeChat Mini Program file (Pipe format)
+const path10 = path.resolve(__dirname, 'wenjian/微信小程序.txt');
+if (fs.existsSync(path10)) {
+    processWeChatEnumerated(path10, '微信小程序');
+} else {
+    console.error(`File not found: ${path10}`);
+}
+
 // Write to JSON
+function normalizeJudgeTypes(arr) {
+    arr.forEach(q => {
+        const ans = (q.answer || '').trim();
+        const opts = q.options || {};
+        const hasOnlyAB = (!!opts.A || !!opts.B) && !opts.C && !opts.D && !opts.E;
+        const isJudgeText = ans === '正确' || ans === '错误';
+        const isABJudge = (ans === 'A' || ans === 'B') && hasOnlyAB && (
+            (opts.A === '正确' && opts.B === '错误') || (opts.A === '错误' && opts.B === '正确')
+        );
+        if (isJudgeText || isABJudge) {
+            q.type = 'judge';
+            if (ans === 'A' || ans === 'B') {
+                const mapAB = { A: opts.A, B: opts.B };
+                if (mapAB[ans]) q.answer = mapAB[ans];
+            }
+            q.options = { A: '对', B: '错' };
+        }
+    });
+}
+normalizeJudgeTypes(questions);
 fs.writeFileSync(outputPath, JSON.stringify(questions, null, 2), 'utf8');
 console.log(`\nTotal questions generated: ${questions.length}`);
 console.log(`Saved to ${outputPath}`);

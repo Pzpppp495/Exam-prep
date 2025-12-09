@@ -45,7 +45,7 @@ const totalSelected = computed(() => {
 const initConfig = () => {
   const config = {};
   categoryStats.value.forEach(cat => {
-    config[cat.name] = cat.name === '云计算' ? Math.min(10, cat.count) : 0;
+    config[cat.name] = cat.name === '微信小程序' ? Math.min(10, cat.count) : 0;
   });
   categoryConfig.value = config;
   isConfiguring.value = true;
@@ -76,6 +76,17 @@ const startExam = () => {
 
   examQuestions.value = selectedQuestions.map((q, index) => ({
     ...q,
+    type: getDisplayType(q),
+    options: (() => {
+      const t = getDisplayType(q);
+      const opts = { ...(q.options || {}) };
+      if (t === 'judge') {
+        opts.A = opts.A || '对';
+        opts.B = opts.B || '错';
+        delete opts.C; delete opts.D; delete opts.E;
+      }
+      return opts;
+    })(),
     examIndex: index + 1
   }));
   
@@ -96,6 +107,7 @@ onMounted(() => {
 const isCorrect = (question) => {
   const userAnswer = userAnswers.value[question.id];
   if (!userAnswer) return false;
+  const displayType = getDisplayType(question);
 
   if (question.type === 'multiple') {
     if (!Array.isArray(userAnswer)) return false;
@@ -108,9 +120,34 @@ const isCorrect = (question) => {
       const normAns = question.answer.toLowerCase();
       // Basic containment check
       return normUser.length > 0 && normAns.includes(normUser);
+  } else if (displayType === 'judge') {
+    const correctLetter = (() => {
+      const ans = (question.answer || '').trim();
+      if (ans === 'A' || ans === 'B') return ans;
+      if (ans === '正确' || ans === '对') return 'A';
+      if (ans === '错误' || ans === '错') return 'B';
+      const opts = question.options || {};
+      if (opts.A === ans) return 'A';
+      if (opts.B === ans) return 'B';
+      return ans;
+    })();
+    return userAnswer === correctLetter;
   } else {
     return userAnswer === question.answer;
   }
+};
+
+const getDisplayType = (q) => {
+  if (q.type === 'judge') return 'judge';
+  const ans = (q.answer || '').trim();
+  const opts = q.options || {};
+  const isJudgeText = ans === '正确' || ans === '错误' || ans === '对' || ans === '错' || ans === 'A' || ans === 'B';
+  const hasJudgeOptions = (
+    (opts.A === '正确' && opts.B === '错误') || (opts.A === '错误' && opts.B === '正确') ||
+    (opts.A === '对' && opts.B === '错') || (opts.A === '错' && opts.B === '对')
+  ) && (!opts.C && !opts.D && !opts.E);
+  if (isJudgeText || hasJudgeOptions) return 'judge';
+  return q.type;
 };
 
 const submitExam = () => {
@@ -228,17 +265,17 @@ const getQuestionStatusClass = (question) => {
         >
           <template #header>
             <div class="card-header">
-              <el-tag v-if="q.type === 'multiple'" type="warning" size="small" style="margin-right: 8px;">多选</el-tag>
-              <el-tag v-else-if="q.type === 'fill'" type="success" size="small" style="margin-right: 8px;">填空</el-tag>
-              <el-tag v-else size="small" style="margin-right: 8px;">单选</el-tag>
+              <el-tag v-if="getDisplayType(q) === 'multiple'" type="warning" size="small" style="margin-right: 8px;">多选</el-tag>
+              <el-tag v-else-if="getDisplayType(q) === 'fill'" type="success" size="small" style="margin-right: 8px;">填空</el-tag>
+              <el-tag v-else-if="getDisplayType(q) === 'judge'" size="small" style="margin-right: 8px;">判断</el-tag>
               <el-tag type="info" size="small" style="margin-right: 8px;">{{ q.category }}</el-tag>
               <span>{{ index + 1 }}. {{ q.question }}</span>
             </div>
           </template>
-          
+
           <div class="options-list">
             <!-- Fill in the blank -->
-            <div v-if="q.type === 'fill'" class="fill-blank-group">
+            <div v-if="getDisplayType(q) === 'fill'" class="fill-blank-group">
                 <el-input
                   v-model="userAnswers[q.id]"
                   type="textarea"
@@ -248,9 +285,20 @@ const getQuestionStatusClass = (question) => {
                 />
             </div>
 
+            <!-- Judge (True/False) -->
+            <el-radio-group 
+              v-else-if="getDisplayType(q) === 'judge'" 
+              v-model="userAnswers[q.id]" 
+              class="radio-group"
+              :disabled="isSubmitted"
+            >
+              <el-radio :value="'A'" size="large" class="option-item">A. 对</el-radio>
+              <el-radio :value="'B'" size="large" class="option-item">B. 错</el-radio>
+            </el-radio-group>
+
             <!-- Single Choice -->
             <el-radio-group 
-              v-else-if="q.type === 'single'" 
+              v-else-if="getDisplayType(q) === 'single'" 
               v-model="userAnswers[q.id]" 
               class="radio-group"
               :disabled="isSubmitted"
@@ -264,7 +312,7 @@ const getQuestionStatusClass = (question) => {
 
             <!-- Multiple Choice -->
             <el-checkbox-group 
-              v-else-if="q.type === 'multiple'" 
+              v-else-if="getDisplayType(q) === 'multiple'" 
               v-model="userAnswers[q.id]" 
               class="checkbox-group"
               :disabled="isSubmitted"
@@ -281,7 +329,7 @@ const getQuestionStatusClass = (question) => {
             <div class="error-msg">❌ 回答错误</div>
             <div class="correct-ans">
               <span class="label">正确答案:</span>
-              <div v-if="q.type === 'fill'" class="multiline-answer">{{ q.answer }}</div>
+              <div v-if="getDisplayType(q) === 'fill'" class="multiline-answer">{{ q.answer }}</div>
               <span v-else>{{ q.answer }}</span>
             </div>
             <div v-if="q.analysis" class="analysis-text">
@@ -292,7 +340,7 @@ const getQuestionStatusClass = (question) => {
             <div class="success-msg">✔ 回答正确</div>
             <div class="correct-ans">
               <span class="label">答案:</span>
-              <div v-if="q.type === 'fill'" class="multiline-answer">{{ q.answer }}</div>
+              <div v-if="getDisplayType(q) === 'fill'" class="multiline-answer">{{ q.answer }}</div>
               <span v-else>{{ q.answer }}</span>
             </div>
             <div v-if="q.analysis" class="analysis-text">
@@ -360,10 +408,10 @@ const getQuestionStatusClass = (question) => {
 .sidebar-content {
   position: sticky;
   top: 20px;
-  background: #fff;
+  background: var(--app-bg-secondary);
   padding: 20px;
   border-radius: 8px;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.15);
 }
 
 .grid-nav {
@@ -379,7 +427,7 @@ const getQuestionStatusClass = (question) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #dcdfe6;
+  border: 1px solid var(--app-border);
   border-radius: 4px;
   cursor: pointer;
   font-size: 14px;
@@ -387,24 +435,24 @@ const getQuestionStatusClass = (question) => {
 }
 
 .nav-item:hover {
-  border-color: #409EFF;
-  color: #409EFF;
+  border-color: var(--app-accent);
+  color: var(--app-accent);
 }
 
 .nav-item.status-answered {
-  background-color: #ecf5ff;
-  border-color: #409EFF;
-  color: #409EFF;
+  background-color: rgba(64, 158, 255, 0.12);
+  border-color: var(--app-accent);
+  color: var(--app-accent);
 }
 
 .nav-item.status-correct {
-  background-color: #f0f9eb;
+  background-color: rgba(103, 194, 58, 0.12);
   border-color: #67C23A;
   color: #67C23A;
 }
 
 .nav-item.status-wrong {
-  background-color: #fef0f0;
+  background-color: rgba(245, 108, 108, 0.12);
   border-color: #F56C6C;
   color: #F56C6C;
 }
@@ -455,12 +503,12 @@ const getQuestionStatusClass = (question) => {
 }
 
 .exam-result-banner {
-  background-color: #f0f9eb;
+  background-color: rgba(103, 194, 58, 0.12);
   padding: 20px;
   border-radius: 8px;
   text-align: center;
   margin-bottom: 20px;
-  border: 1px solid #e1f3d8;
+  border: 1px solid #67C23A;
 }
 
 .score-info {
@@ -473,13 +521,13 @@ const getQuestionStatusClass = (question) => {
 .answer-analysis {
   margin-top: 20px;
   padding: 15px;
-  background-color: #fef0f0;
+  background-color: rgba(245, 108, 108, 0.12);
   border-radius: 4px;
   border-left: 4px solid #F56C6C;
 }
 
 .answer-analysis.success {
-  background-color: #f0f9eb;
+  background-color: rgba(103, 194, 58, 0.12);
   border-left-color: #67C23A;
 }
 
@@ -497,13 +545,13 @@ const getQuestionStatusClass = (question) => {
 
 .correct-ans {
   font-size: 14px;
-  color: #606266;
+  color: var(--app-text);
 }
 
 .analysis-text {
   margin-top: 10px;
   font-size: 14px;
-  color: #606266;
+  color: var(--app-text);
   line-height: 1.6;
   white-space: pre-wrap;
 }
@@ -512,7 +560,7 @@ const getQuestionStatusClass = (question) => {
   white-space: pre-wrap;
   margin-top: 5px;
   font-family: monospace;
-  background: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.08);
   padding: 8px;
   border-radius: 4px;
 }
@@ -523,13 +571,13 @@ const getQuestionStatusClass = (question) => {
 }
 
 .wrong-answer-card {
-  border-color: #fab6b6;
+  border-color: rgba(245, 108, 108, 0.5);
 }
 
 .sidebar-legend {
   margin-top: 20px;
   font-size: 12px;
-  color: #909399;
+  color: var(--app-text);
   display: flex;
   gap: 15px;
   justify-content: center;
@@ -540,23 +588,23 @@ const getQuestionStatusClass = (question) => {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background-color: #fff;
-  border: 1px solid #dcdfe6;
+  background-color: var(--app-bg);
+  border: 1px solid var(--app-border);
   margin-right: 5px;
 }
 
 .dot.answered {
-  background-color: #ecf5ff;
-  border-color: #409EFF;
+  background-color: rgba(64, 158, 255, 0.12);
+  border-color: var(--app-accent);
 }
 
 .dot.correct {
-  background-color: #f0f9eb;
+  background-color: rgba(103, 194, 58, 0.12);
   border-color: #67C23A;
 }
 
 .dot.wrong {
-  background-color: #fef0f0;
+  background-color: rgba(245, 108, 108, 0.12);
   border-color: #F56C6C;
 }
 
@@ -576,13 +624,13 @@ const getQuestionStatusClass = (question) => {
 
 .config-header h2 {
   margin: 0 0 10px 0;
-  color: #303133;
+  color: var(--app-text);
   font-size: 24px;
 }
 
 .subtitle {
   margin: 0;
-  color: #909399;
+  color: var(--app-text);
   font-size: 14px;
 }
 
@@ -598,13 +646,13 @@ const getQuestionStatusClass = (question) => {
   justify-content: space-between;
   align-items: center;
   padding: 15px;
-  background-color: #f5f7fa;
+  background-color: var(--app-bg-secondary);
   border-radius: 6px;
   transition: background-color 0.3s;
 }
 
 .config-item:hover {
-  background-color: #e6e8eb;
+  background-color: var(--app-bg-secondary);
 }
 
 .cat-info {
@@ -616,12 +664,12 @@ const getQuestionStatusClass = (question) => {
 .cat-name {
   font-size: 16px;
   font-weight: bold;
-  color: #303133;
+  color: var(--app-text);
 }
 
 .cat-total {
   font-size: 12px;
-  color: #909399;
+  color: var(--app-text);
 }
 
 .config-footer {
@@ -630,17 +678,17 @@ const getQuestionStatusClass = (question) => {
   flex-direction: column;
   align-items: center;
   gap: 20px;
-  border-top: 1px solid #ebeef5;
+  border-top: 1px solid var(--app-border);
   padding-top: 20px;
 }
 
 .total-summary {
   font-size: 18px;
-  color: #606266;
+  color: var(--app-text);
 }
 
 .highlight {
-  color: #409EFF;
+  color: var(--app-accent);
   font-weight: bold;
   font-size: 24px;
   margin: 0 5px;

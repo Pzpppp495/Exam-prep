@@ -48,23 +48,50 @@ const isCorrect = (question) => {
   const userAnswer = userAnswers.value[question.id];
   if (!userAnswer) return false;
 
-  if (question.type === 'multiple') {
+  const displayType = getDisplayType(question);
+
+  if (displayType === 'multiple') {
     if (!Array.isArray(userAnswer)) return false;
     const sortedUserAnswer = [...userAnswer].sort().join('');
     const sortedCorrectAnswer = question.answer.split('').sort().join('');
     return sortedUserAnswer === sortedCorrectAnswer;
-  } else if (question.type === 'fill') {
+  } else if (displayType === 'fill') {
     if (typeof userAnswer !== 'string') return false;
     const normUser = userAnswer.trim().toLowerCase();
     const normAns = question.answer.toLowerCase();
     return normUser.length > 0 && normAns.includes(normUser);
+  } else if (displayType === 'judge') {
+    const correctLetter = (() => {
+      const ans = (question.answer || '').trim();
+      if (ans === 'A' || ans === 'B') return ans;
+      if (ans === '正确' || ans === '对') return 'A';
+      if (ans === '错误' || ans === '错') return 'B';
+      const opts = question.options || {};
+      if (opts.A === ans) return 'A';
+      if (opts.B === ans) return 'B';
+      return ans;
+    })();
+    return userAnswer === correctLetter;
   } else {
     return userAnswer === question.answer;
   }
 };
 
 const getQuestionTypeLabel = (type) => {
-  return type === 'multiple' ? '(多选题)' : '(单选题)';
+  return type === 'multiple' ? '(多选题)' : type === 'judge' ? '(判断题)' : '(单选题)';
+};
+
+const getDisplayType = (q) => {
+  if (q.type === 'judge') return 'judge';
+  const ans = (q.answer || '').trim();
+  const opts = q.options || {};
+  const isJudgeText = ans === '正确' || ans === '错误' || ans === '对' || ans === '错' || ans === 'A' || ans === 'B';
+  const hasJudgeOptions = (
+    (opts.A === '正确' && opts.B === '错误') || (opts.A === '错误' && opts.B === '正确') ||
+    (opts.A === '对' && opts.B === '错') || (opts.A === '错' && opts.B === '对')
+  ) && (!opts.C && !opts.D && !opts.E);
+  if (isJudgeText || hasJudgeOptions) return 'judge';
+  return q.type;
 };
 
 // Pagination
@@ -112,8 +139,9 @@ watch(currentPage, (newVal) => {
     <el-card v-for="(q, index) in paginatedQuestions" :key="q.id" class="question-card">
       <template #header>
         <div class="card-header">
-          <el-tag v-if="q.type === 'multiple'" type="warning" size="small" style="margin-right: 8px;">多选</el-tag>
-          <el-tag v-else-if="q.type === 'fill'" type="success" size="small" style="margin-right: 8px;">填空</el-tag>
+          <el-tag v-if="getDisplayType(q) === 'multiple'" type="warning" size="small" style="margin-right: 8px;">多选</el-tag>
+          <el-tag v-else-if="getDisplayType(q) === 'fill'" type="success" size="small" style="margin-right: 8px;">填空</el-tag>
+          <el-tag v-else-if="getDisplayType(q) === 'judge'" size="small" style="margin-right: 8px;">判断</el-tag>
           <el-tag v-else size="small" style="margin-right: 8px;">单选</el-tag>
           <el-tag type="info" size="small" style="margin-right: 8px;">{{ q.category }}</el-tag>
           <span>{{ (currentPage - 1) * pageSize + index + 1 }}. {{ q.question }}</span>
@@ -121,7 +149,7 @@ watch(currentPage, (newVal) => {
       </template>
       
       <div class="options-list">
-        <div v-if="q.type === 'fill'" class="fill-blank-group">
+        <div v-if="getDisplayType(q) === 'fill'" class="fill-blank-group">
           <el-input
             v-model="userAnswers[q.id]"
             type="textarea"
@@ -130,7 +158,12 @@ watch(currentPage, (newVal) => {
           />
         </div>
 
-        <el-radio-group v-else-if="q.type === 'single'" v-model="userAnswers[q.id]" class="radio-group">
+        <el-radio-group v-else-if="getDisplayType(q) === 'judge'" v-model="userAnswers[q.id]" class="radio-group">
+          <el-radio :value="'A'" size="large" class="option-item">A. 对</el-radio>
+          <el-radio :value="'B'" size="large" class="option-item">B. 错</el-radio>
+        </el-radio-group>
+
+        <el-radio-group v-else-if="getDisplayType(q) === 'single'" v-model="userAnswers[q.id]" class="radio-group">
           <el-radio :value="'A'" size="large" class="option-item">A. {{ q.options.A }}</el-radio>
           <el-radio :value="'B'" size="large" class="option-item">B. {{ q.options.B }}</el-radio>
           <el-radio :value="'C'" size="large" class="option-item">C. {{ q.options.C }}</el-radio>
@@ -138,13 +171,15 @@ watch(currentPage, (newVal) => {
           <el-radio v-if="q.options.E" :value="'E'" size="large" class="option-item">E. {{ q.options.E }}</el-radio>
         </el-radio-group>
 
-        <el-checkbox-group v-else v-model="userAnswers[q.id]" class="checkbox-group">
+        <el-checkbox-group v-else-if="getDisplayType(q) === 'multiple'" v-model="userAnswers[q.id]" class="checkbox-group">
           <el-checkbox value="A" size="large" class="option-item">A. {{ q.options.A }}</el-checkbox>
           <el-checkbox value="B" size="large" class="option-item">B. {{ q.options.B }}</el-checkbox>
           <el-checkbox value="C" size="large" class="option-item">C. {{ q.options.C }}</el-checkbox>
           <el-checkbox value="D" size="large" class="option-item">D. {{ q.options.D }}</el-checkbox>
           <el-checkbox v-if="q.options.E" value="E" size="large" class="option-item">E. {{ q.options.E }}</el-checkbox>
         </el-checkbox-group>
+
+        <div v-else class="unknown-type">该题型暂不支持</div>
       </div>
 
       <div class="actions">
