@@ -45,7 +45,7 @@ const totalSelected = computed(() => {
 const initConfig = () => {
   const config = {};
   categoryStats.value.forEach(cat => {
-    config[cat.name] = cat.name === '微信小程序' ? Math.min(10, cat.count) : 0;
+    config[cat.name] = cat.name === 'Python题库(1)' ? Math.min(10, cat.count) : 0;
   });
   categoryConfig.value = config;
   isConfiguring.value = true;
@@ -105,6 +105,7 @@ onMounted(() => {
 });
 
 const isCorrect = (question) => {
+  if (question.program) return false;
   const userAnswer = userAnswers.value[question.id];
   if (!userAnswer) return false;
   const displayType = getDisplayType(question);
@@ -168,18 +169,18 @@ const submitExam = () => {
 };
 
 const calculateScore = () => {
+  const scored = examQuestions.value.filter(q => !q.program);
   let correct = 0;
-  examQuestions.value.forEach(q => {
+  scored.forEach(q => {
     if (isCorrect(q)) {
       correct++;
     }
   });
-  
   examResult.value = {
-    score: Math.round((correct / examQuestions.value.length) * 100),
-    total: examQuestions.value.length,
+    score: scored.length > 0 ? Math.round((correct / scored.length) * 100) : 0,
+    total: scored.length,
     correctCount: correct,
-    wrongCount: examQuestions.value.length - correct
+    wrongCount: scored.length - correct
   };
 };
 
@@ -192,14 +193,13 @@ const scrollToQuestion = (index) => {
 
 const getQuestionStatusClass = (question) => {
   if (!isSubmitted.value) {
-    // In exam mode, show answered/unanswered
     const ans = userAnswers.value[question.id];
     if (ans && (Array.isArray(ans) ? ans.length > 0 : true)) {
       return 'status-answered';
     }
     return '';
   } else {
-    // In result mode, show correct/wrong
+    if (question.program) return '';
     return isCorrect(question) ? 'status-correct' : 'status-wrong';
   }
 };
@@ -261,7 +261,7 @@ const getQuestionStatusClass = (question) => {
           :key="q.id" 
           :id="`question-${index}`"
           class="question-card"
-          :class="{ 'wrong-answer-card': isSubmitted && !isCorrect(q) }"
+          :class="{ 'wrong-answer-card': isSubmitted && !q.program && !isCorrect(q) }"
         >
           <template #header>
             <div class="card-header">
@@ -325,7 +325,13 @@ const getQuestionStatusClass = (question) => {
             </el-checkbox-group>
           </div>
 
-          <div v-if="isSubmitted && !isCorrect(q)" class="answer-analysis">
+          <div v-if="isSubmitted && q.program" class="answer-analysis">
+            <div class="correct-ans">
+              <span class="label">参考代码:</span>
+              <div class="multiline-answer">{{ q.answer }}</div>
+            </div>
+          </div>
+          <div v-else-if="isSubmitted && !isCorrect(q)" class="answer-analysis">
             <div class="error-msg">❌ 回答错误</div>
             <div class="correct-ans">
               <span class="label">正确答案:</span>

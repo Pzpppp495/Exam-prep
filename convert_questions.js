@@ -422,13 +422,32 @@ function processFormat4(filePath, category) {
         let currentQ = null;
         let isCollectingAnswer = false;
         let isCollectingAnalysis = false;
+        const isPythonBank = /python题目/i.test(path.basename(filePath));
         
         for (let i = 0; i < lines.length; i++) {
             let line = lines[i];
+            if (isPythonBank && /^(简答题复习|编程题复习)/.test(line)) {
+                if (currentQ) {
+                    if (currentQ.type === 'fill' && currentQ.answer) {
+                        currentQ.answer = currentQ.answer.trim();
+                    }
+                    extracted.push(currentQ);
+                    currentQ = null;
+                }
+                isCollectingAnswer = false;
+                isCollectingAnalysis = false;
+                continue;
+            }
             
             // Check for Question start: "1. ..."
             // We assume a new question starts with a number followed by a dot
             if (/^\d+\./.test(line)) {
+                const hasTypeLabel = /[(（]\s*(单|多|判断|填空|简答|程序)(选题|题)?\s*[)）]/.test(line);
+                // In Python 题库，存在题内分点如 "1.可变性" 等，不应视作新题
+                if (isPythonBank && currentQ && !hasTypeLabel) {
+                    currentQ.question += ' ' + line;
+                    continue;
+                }
                 // Finalize previous question if exists
                 if (currentQ) {
                     // If last question was fill-in and answer is still being collected, finalize answer
@@ -444,7 +463,8 @@ function processFormat4(filePath, category) {
                 
                 let type = 'single'; // Default
                 // Detect type from label if present (handle both half and full width parens, and spaces)
-                if (/[(（]\s*(填空题|填空)\s*[)）]/.test(text)) {
+                const isProgramLabel = /[(（]\s*(程序题|程序)\s*[)）]/.test(line);
+                if (/[(（]\s*(填空题|填空|简答题|简答|程序题|程序)\s*[)）]/.test(text)) {
                     type = 'fill';
                 } else if (/[(（]\s*(多选题|多选)\s*[)）]/.test(text)) {
                     type = 'multiple';
@@ -458,7 +478,7 @@ function processFormat4(filePath, category) {
                 // }
 
                 // Remove type label
-                text = text.replace(/^[(（]\s*(单|多|判断|填空)(选题|题|选)?\s*[)）]/, '').trim();
+                text = text.replace(/^[(（]\s*(单|多|判断|填空|简答|程序)(选题|题|选)?\s*[)）]/, '').trim();
                 
                 currentQ = {
                     question: text,
@@ -467,18 +487,22 @@ function processFormat4(filePath, category) {
                     answer: '',
                     analysis: '', // Add analysis field
                     type: type, 
-                    rawOptions: '' 
+                    rawOptions: '',
+                    program: isProgramLabel ? true : false 
                 };
-                isCollectingAnswer = false;
+                isCollectingAnswer = isProgramLabel ? true : false;
                 isCollectingAnalysis = false;
                 continue;
             }
             
             // Check for Answer line
-            if (line.startsWith('正确答案')) {
+            if (line.startsWith('正确答案') || /^答案[:：]/.test(line)) {
                  // Check if it has content (Single line answer)
-                 // Normalize colon to check content
-                 let content = line.replace(/^正确答案[:：]/, '').trim();
+                 // Normalize colon to check content (support both "正确答案" and "答案")
+                 let content = line
+                    .replace(/^正确答案[:：]/, '')
+                    .replace(/^答案[:：]/, '')
+                    .trim();
                  
                  // Check for analysis in the same line
                  const analysisIdx = content.indexOf('答案解析');
@@ -488,6 +512,15 @@ function processFormat4(filePath, category) {
                  }
  
                  if (content.length > 0) {
+                      // If content indicates a code-style answer block (e.g. def answer_...)
+                      if (/^def\s+answer/i.test(content)) {
+                          if (currentQ) {
+                              isCollectingAnswer = true;
+                              isCollectingAnalysis = false;
+                              currentQ.type = 'fill';
+                          }
+                          continue;
+                      }
                       // Single line answer (Choice)
                       if (currentQ) {
                           // Format: "B:Answer" or just "B"
@@ -519,8 +552,15 @@ function processFormat4(filePath, category) {
                  }
                  continue;
             }
-            
+
             if (currentQ) {
+                // Support code-style answer blocks starting with def answer_*
+                if (/^def\s+answer/i.test(line)) {
+                    isCollectingAnswer = true;
+                    isCollectingAnalysis = false;
+                    currentQ.type = 'fill';
+                    continue;
+                }
                 if (isCollectingAnswer) {
                     // Collecting fill-in answer
                     // Check for analysis start
@@ -538,7 +578,30 @@ function processFormat4(filePath, category) {
                          isCollectingAnswer = false;
                          isCollectingAnalysis = true;
                     } else {
-                         currentQ.answer += (currentQ.answer ? '\n' : '') + line;
+                         // For program questions, treat the first descriptive line as question
+                         if (currentQ.program && (!currentQ.question || currentQ.question.trim().length === 0)) {
+                             const isCodeLike = /^(class\s|def\s|from\s|import\s|for\s|while\s|if\s|print\(|return\b|\w+\s*=)/.test(line);
+                             if (!isCodeLike) {
+                                 currentQ.question = (line || '').trim();
+                                 continue;
+                             }
+                         }
+                         // 对程序题保留整行代码；非程序题可提取引号内文本
+                         if (currentQ.program) {
+                             currentQ.answer += (currentQ.answer ? '\n' : '') + line.trim();
+                         } else {
+                             const qm = line.match(/["“](.*?)["”]/);
+                             if (qm && qm[1]) {
+                                 currentQ.answer += (currentQ.answer ? '\n' : '') + qm[1].trim();
+                             } else {
+                                 currentQ.answer += (currentQ.answer ? '\n' : '') + line.trim();
+                             }
+                         }
+                         // Stop collecting when reaching closing bracket of list on a line
+                         // For Python 程序题，答案常在列表后还包含 print 输出，不能在此停止
+                         if (!currentQ.program && /^\s*\]\s*$/.test(line)) {
+                             isCollectingAnswer = false;
+                         }
                     }
                 } else if (isCollectingAnalysis) {
                      currentQ.analysis += '\n' + line;
@@ -1118,6 +1181,14 @@ if (fs.existsSync(path10)) {
     processWeChatEnumerated(path10, '微信小程序');
 } else {
     console.error(`File not found: ${path10}`);
+}
+
+// 11. Process Python question bank file (Format 4)
+const path11 = path.resolve(__dirname, 'wenjian/python题目(1).txt');
+if (fs.existsSync(path11)) {
+    processFormat4(path11, 'Python题库(1)');
+} else {
+    console.error(`File not found: ${path11}`);
 }
 
 // Write to JSON
